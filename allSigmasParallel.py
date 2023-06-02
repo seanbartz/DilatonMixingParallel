@@ -5,6 +5,9 @@ Created on Wed Nov 16 15:48:44 2022
 
 Figured out how to pass additional parameters while using Pools.
 
+NOTE: differences from threeflavorALLvalues.py 
+-- Does not break after finding three values of truesigma, so may take longer, and could try to store too many values
+
 -------
 Branched from earlier file (threeflavorALLvalues.py) with the following notes:
 
@@ -27,7 +30,7 @@ from solveTmu import blackness
 from threeflavorALLvalues import chiral
 
 from scipy.integrate import odeint
-from timebudget import timebudget
+# from timebudget import timebudget
 
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
@@ -156,19 +159,19 @@ def allSigmas(args):
     return truesigma
 if __name__ == '__main__':
     
-    tmin=102
-    tmax=102.5
-    numtemp=10
+    tmin=123.93
+    tmax=123.94
+    numtemp=25
 
     temps=np.linspace(tmin,tmax,numtemp)
     
         #light quark mass
-    ml=24*np.ones(numtemp)
+    ml=15*np.ones(numtemp)
     
     #chemical potential
-    mu=500*np.ones(numtemp)
+    mu=695*np.ones(numtemp)
     
-    lambda1= 7.438*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
+    lambda1= 6.3*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
     
     minsigma=00*np.ones(numtemp)
     maxsigma=300*np.ones(numtemp)
@@ -193,6 +196,7 @@ if __name__ == '__main__':
     plt.xlabel('Temperature (MeV)')
     plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
     plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml[0],mu[0],lambda1[0]))
+    plt.show()
     
     #save the figure with the parameters in the name, in a subfolder called 'plots'
     plt.savefig('plots/sigma_vs_T_mq%i_mu%i_lam%f.eps' %(ml[0],mu[0],lambda1[0]))

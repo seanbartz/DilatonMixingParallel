@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-
-EDITED on March 10 2023:
-    Allows stepsize over sigma to be non-integer, for finer search
-
 EDITED on November 15 2022:
     Parallel processing with Pools for speedup by factor of ~3 on an 8-CPU machine
 
@@ -18,6 +14,7 @@ If there are multiple values, then the transition is 1st order.
 @author: seanbartz
 """
 import numpy as np
+# import math
 from scipy.integrate import odeint
 from solveTmu import blackness
 
@@ -37,15 +34,15 @@ import os
 
 def chiral(y,u,params):
     chi,chip=y
-    v3,v4,lambda1,mu_g,a0,zh,q=params
+    v3,v4,lambda1,mu0,mu1,mu2,zh,q=params
     
     Q=q*zh**3
     
     
-    "Ballon-Bayona version"
-    phi = (mu_g*zh*u)**2-a0*(mu_g*zh*u)**3/(1+(mu_g*zh*u)**4)
-    phip = 2*u*(zh*mu_g)**2+a0*(4*u**6*(zh*mu_g)**7/(1+(u*zh*mu_g)**4)**2-3*u**2*(zh*mu_g)**3/(1+(u*zh*mu_g)**4))
-
+    "Exponential parameterization"
+    phi = -(mu1*zh*u)**2+(mu0**2+mu1**2)*(zh**2)*(u**2)*(1-np.exp(-(mu2**2)*(zh**2)*(u**2)))
+    phip = -2*u*(mu1*zh)**2+2*(mu1**2+mu0**2)*(mu**2)*(zh**4)*(u**3)*np.exp(-(mu2**2)*(zh**2)*(u**2))+2*(mu1**2+mu0**2)*(zh**2)*u*(1-np.exp(-(mu2**2)*(zh**2)*(u**2)))
+                                                    
     f= 1 - (1+Q**2)*u**4 + Q**2*u**6
     fp= -4*(1+Q**2)*u**3 + 6*Q**2*u**5
     "EOM for chiral field"
@@ -61,15 +58,12 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
 
     minsigma=int(minsigma)
     maxsigma=int(maxsigma)
-    "stepsize for search over sigma"
-    "Note: search should be done over cube root of sigma, here called sl"
     deltasig = 1
-    
-    # create an array of sigma values from minsigma to maxsigma, incrementing by deltasig
     sigmavalues = np.arange(minsigma,maxsigma,deltasig)
-    
-    mu_g=440
-
+    mu0 = 430
+    mu1 = 830
+    mu2 = 176
+    mu_g = 440
     "solve for horizon and charge"
     zh,q=blackness(T,mu)
     Q=q*zh**3
@@ -102,17 +96,18 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     v3= -22.6/(6*np.sqrt(2))
     
     "need the dilaton for mixing term in test function"
-    "Ballon-Bayona version"
-    phi = (mu_g*zh*u)**2-a0*(mu_g*zh*u)**3/(1+(mu_g*zh*u)**4)
+    "Exponential parameterization"
+    phi = -(mu1*zh*u)**2+(mu0**2+mu1**2)*(zh**2)*(u**2)*(1-np.exp(-(mu2**2)*(zh**2)*(u**2)))
         
     #sigmal=260**3
-    params=v3,v4,lambda1,mu_g,a0,zh,q
+    params=v3,v4,lambda1,mu0,mu1,mu2,a0,zh,q
     "blackness function and its derivative, Reissner-Nordstrom metric"
     "This version is for finite temp, finite chemical potential"
     f = 1 - (1+Q**2)*u**4 + Q**2*u**6
     fp = -4*(1+Q**2)*u**3 + 6*Q**2*u**5
     
-
+    "stepsize for search over sigma"
+    "Note: search should be done over cube root of sigma, here called sl"
     #tic = time.perf_counter()
 
     truesigma = 0
@@ -127,13 +122,9 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     s2=-3*(ml*zeta)**2*v3
     s3=-9*(zeta*ml)**3*v3**2 + 2*(zeta*ml)**3*v4 + ml*zeta*mu_g**2 - 1/2*ml*zeta*lambda1*mu_g**2
 
-    #use this line if deltasig is an integer
-    # for sl in range (minsigma,maxsigma,deltasig):
-    
-    #use these next two lines if deltasig is not an integer
+    #for sl in range (minsigma,maxsigma,deltasig):
     for i in range(len(sigmavalues)):
         sl=sigmavalues[i]
-    
         "values for chiral field and derivative at UV boundary"
         sigmal = sl**3
         UVbound = [ml*zeta*zh*ui + sigmal/zeta*(zh*ui)**3+s2*(zh*ui)**2+s3*(zh*ui)**3*np.log(zh*ui), 
@@ -178,15 +169,15 @@ def get_all_sigmas_parallel(operation,input,pool):
     truesigma=pool.map(operation, input)
     
     return truesigma
-
     
 
 if __name__ == '__main__':
 
         
-    tmin=116.4
-    tmax=118
+    tmin=0
+    tmax=100
     numtemp=50
+    
     
     temps=np.linspace(tmin,tmax,numtemp)
     
@@ -194,12 +185,12 @@ if __name__ == '__main__':
     ml=24*np.ones(numtemp)
     
     #chemical potential
-    mu=400*np.ones(numtemp)
+    mu=800*np.ones(numtemp)
     
-    lambda1=7.438*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
+    lambda1=5*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
     
-    minsigma=50*np.ones(numtemp)
-    maxsigma=225*np.ones(numtemp)
+    minsigma=0*np.ones(numtemp)
+    maxsigma=500*np.ones(numtemp)
     
     a0=0.*np.ones(numtemp)
     
@@ -208,38 +199,25 @@ if __name__ == '__main__':
 
 
     #need up to 3 sigma values per temperature
-    # truesigma=np.zeros([numtemp,3])
+    #truesigma=np.zeros([numtemp,3])
     
     "This calls the old version, which loops over all temps. Only un-comment for speed comparisons"
-    # truesigma=get_all_sigmas(allSigmas,tempsArgs)
+    #truesigma=get_all_sigmas(allSigmas,tempsArgs)
     
     "Create a pool that uses all available cpus"
     processes_count=os.cpu_count()    
     processes_pool = Pool(processes_count)
     
+    #Produces: TypeError: only size-1 arrays can be converted to Python scalars
     truesigma=get_all_sigmas_parallel(allSigmas,tempsArgs,processes_pool)
     truesigma=np.array(truesigma)
     processes_pool.close()
     
-    # find the indices of the non-zero values of truesigma
-    # this is necessary because the function returns 0 for sigma values that don't exist
-    nonzero1=np.nonzero(truesigma[:,0])
-    truesigma1=truesigma[:,0][nonzero1]
-    temps1=temps[nonzero1]
-
-    nonzero2=np.nonzero(truesigma[:,1])
-    truesigma2=truesigma[:,1][nonzero2]
-    temps2=temps[nonzero2]
-
-    nonzero3=np.nonzero(truesigma[:,2])
-    truesigma3=truesigma[:,2][nonzero3]
-    temps3=temps[nonzero3]
-
-    # scatter plot the non-zero values    
-    plt.scatter(temps1,truesigma1)
-    plt.scatter(temps2,truesigma2)
-    plt.scatter(temps3,truesigma3)
-    #plt.ylim([min(truesigma1)-5,max(truesigma[:,0])+5])
+        
+    plt.scatter(temps,truesigma[:,0])
+    plt.scatter(temps,truesigma[:,1])
+    plt.scatter(temps,truesigma[:,2])
+    plt.ylim([min(truesigma[:,0])-5,max(truesigma[:,0])+5])
     plt.xlabel('Temperature (MeV)')
     plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
     plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml[0],mu[0],lambda1[0]))
@@ -260,42 +238,9 @@ if __name__ == '__main__':
 
         #print the sigma values for the new bounds
         print("Sigma bounds for the next search are ", minsigma, maxsigma)
-
-        #plot just truesigma1
-        plt.plot(temps1,truesigma1,linewidth=3)
-        plt.xlabel('Temperature (MeV)')
-        plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
-        plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml[0],mu[0],lambda1[0]))
-        plt.show()
     else:
         print("First order")  
         #crtical temperature is where truesigma has multiple solutions  
         print("Critical temperature is ", temps[np.argmax(truesigma[:,1])] )
-
-        #reverse the order of the arrays where the plot goes "backward"
-        temps2= temps2[::-1]
-        truesigma2= truesigma2[::-1]
-        #find the index where the gradient of truesgima1 is most negative
-        splitIndex1=np.argmin(np.gradient(truesigma1))
-
-        #split truesigma1 and temps1 into two arrays at the index where the gradient is most negative
-        truesigma1a=truesigma1[:splitIndex1]
-        truesigma1b=truesigma1[splitIndex1:]
-        temps1a=temps1[:splitIndex1]
-        temps1b=temps1[splitIndex1:]
-
-        #join the arrays in the following order truesigma1a, truesigma3, truesigma2, truesigma1b
-        truesigma=np.concatenate((truesigma1a,truesigma3,truesigma2,truesigma1b))
-        temps=np.concatenate((temps1a,temps3,temps2,temps1b))
-
-        "Uncomment these lines to make a nice-looking graph"
-        plt.plot(temps,truesigma,linewidth=3)
-        plt.xlabel('Temperature (MeV)')
-        plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
-        plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=%.3f$' %(ml[0],mu[0],float(str(lambda1[0]).rstrip('0').rstrip('.'))))        
-        # save the plot 
-        plt.savefig('plots/sigmaVsT_lambda_7438_mq_24_mu_400.png',dpi=500)
-        
-        plt.show()
     # end_time=time.perf_counter()
     # print("Time elapsed = ", end_time-start_time )

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on Friday December 30 2022
+Split from threeflavorALLvalues.py
 
-EDITED on March 10 2023:
-    Allows stepsize over sigma to be non-integer, for finer search
+This version iteratively zooms in on the critical temperature, terminating when a first order transition is found.
 
+
+Notes from previous version:
+-----------------------
 EDITED on November 15 2022:
     Parallel processing with Pools for speedup by factor of ~3 on an 8-CPU machine
 
@@ -61,12 +65,6 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
 
     minsigma=int(minsigma)
     maxsigma=int(maxsigma)
-    "stepsize for search over sigma"
-    "Note: search should be done over cube root of sigma, here called sl"
-    deltasig = 1
-    
-    # create an array of sigma values from minsigma to maxsigma, incrementing by deltasig
-    sigmavalues = np.arange(minsigma,maxsigma,deltasig)
     
     mu_g=440
 
@@ -112,8 +110,16 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     f = 1 - (1+Q**2)*u**4 + Q**2*u**6
     fp = -4*(1+Q**2)*u**3 + 6*Q**2*u**5
     
-
+    "stepsize for search over sigma"
+    "Note: search should be done over cube root of sigma, here called sl"
+    if maxsigma-minsigma<10:
+        deltasig = 0.1
+    else:
+        deltasig = 1
     #tic = time.perf_counter()
+
+    # create an array of sigma values from minsigma to maxsigma, incrementing by deltasig
+    sigmavalues = np.arange(minsigma,maxsigma,deltasig)
 
     truesigma = 0
     "This version steps over all values to find multiple solutions at some temps"
@@ -127,13 +133,9 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     s2=-3*(ml*zeta)**2*v3
     s3=-9*(zeta*ml)**3*v3**2 + 2*(zeta*ml)**3*v4 + ml*zeta*mu_g**2 - 1/2*ml*zeta*lambda1*mu_g**2
 
-    #use this line if deltasig is an integer
-    # for sl in range (minsigma,maxsigma,deltasig):
-    
-    #use these next two lines if deltasig is not an integer
+    #for sl in range (minsigma,maxsigma,deltasig):
     for i in range(len(sigmavalues)):
         sl=sigmavalues[i]
-    
         "values for chiral field and derivative at UV boundary"
         sigmal = sl**3
         UVbound = [ml*zeta*zh*ui + sigmal/zeta*(zh*ui)**3+s2*(zh*ui)**2+s3*(zh*ui)**3*np.log(zh*ui), 
@@ -179,31 +181,23 @@ def get_all_sigmas_parallel(operation,input,pool):
     
     return truesigma
 
-    
+'''
+ this function finds all sigma values for a range of temperatures. 
+ Its input is a range of temperatures, the number of temperature values, and the sigma range.
+ It outputs whether the transition is first order or second order.
+ If second order, it outputs new bounds for the sigma values and the new temperature range.
+'''
+def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
 
-if __name__ == '__main__':
-
-        
-    tmin=116.4
-    tmax=118
-    numtemp=50
-    
     temps=np.linspace(tmin,tmax,numtemp)
-    
-    #light quark mass
-    ml=24*np.ones(numtemp)
-    
-    #chemical potential
-    mu=400*np.ones(numtemp)
-    
-    lambda1=7.438*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
-    
-    minsigma=50*np.ones(numtemp)
-    maxsigma=225*np.ones(numtemp)
-    
-    a0=0.*np.ones(numtemp)
-    
-    
+    lambda1 = lambda1*np.ones(numtemp)
+    ml = ml*np.ones(numtemp)
+    mu = mu*np.ones(numtemp)
+    a0 = a0*np.ones(numtemp)
+
+    minsigma=minsigma*np.ones(numtemp)
+    maxsigma=maxsigma*np.ones(numtemp)
+
     tempsArgs=np.array([temps,mu,ml,minsigma,maxsigma,a0,lambda1]).T
 
 
@@ -221,81 +215,86 @@ if __name__ == '__main__':
     truesigma=np.array(truesigma)
     processes_pool.close()
     
-    # find the indices of the non-zero values of truesigma
-    # this is necessary because the function returns 0 for sigma values that don't exist
-    nonzero1=np.nonzero(truesigma[:,0])
-    truesigma1=truesigma[:,0][nonzero1]
-    temps1=temps[nonzero1]
+        
 
-    nonzero2=np.nonzero(truesigma[:,1])
-    truesigma2=truesigma[:,1][nonzero2]
-    temps2=temps[nonzero2]
-
-    nonzero3=np.nonzero(truesigma[:,2])
-    truesigma3=truesigma[:,2][nonzero3]
-    temps3=temps[nonzero3]
-
-    # scatter plot the non-zero values    
-    plt.scatter(temps1,truesigma1)
-    plt.scatter(temps2,truesigma2)
-    plt.scatter(temps3,truesigma3)
-    #plt.ylim([min(truesigma1)-5,max(truesigma[:,0])+5])
-    plt.xlabel('Temperature (MeV)')
-    plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
-    plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml[0],mu[0],lambda1[0]))
-    plt.show()
-
+    
     if max(truesigma[:,1])==0:
         print("Crossover or 2nd order")
-        #find the temp value where the gradient of truesigma[:,0] is most negative
+        #keep only the non-zero values of truesigma, and the corresponding temperatures
+        temps=temps[truesigma[:,0]!=0]
+        truesigma=truesigma[truesigma[:,0]!=0]
+
+        numtemp=len(temps)
+        #find the temp value where the gradient of truesigma[:,0]**3 is most negative, and the value of truesigma[:,0] is not zero
         #this is the pseudo-critical temperature
-        print("Pseudo-Critical temperature is between", temps[np.argmin(np.gradient(truesigma[:,0]))-1], temps[np.argmin(np.gradient(truesigma[:,0]))] )
-        #these temperature values are the new bounds for the next iteration
-        tmin=temps[np.argmin(np.gradient(truesigma[:,0]))-1]
-        tmax=temps[np.argmin(np.gradient(truesigma[:,0]))]
+
+        #NOTE: we get better results when looking at the gradient of truesigma[:,0]**3, rather than truesigma[:,0]
+        # this avoids accidentally identifying the temperature at which truesigma[:,0] goes to zero as the critical temperature
+        transitionIndex=np.argmin(np.gradient(truesigma[:,0]**3))
+        buffer=2
+        print("Pseudo-Critical temperature is between", temps[max(transitionIndex-buffer,0)], temps[min(transitionIndex+buffer,numtemp-1)] )
+        #these temperature values are the new bounds for the next iteration, with a buffer of 1
+        tmin=temps[max(transitionIndex-buffer,0)]
+        tmax=temps[min(transitionIndex+buffer,numtemp-1)]
 
         #these values of sigma are the new bounds for the next iteration
-        maxsigma=truesigma[np.argmin(np.gradient(truesigma[:,0]))-1,0]
-        minsigma=truesigma[np.argmin(np.gradient(truesigma[:,0])),0]
+        maxsigma=truesigma[0,0]+1
+        minsigma=truesigma[numtemp-1,0]
 
         #print the sigma values for the new bounds
-        print("Sigma bounds for the next search are ", minsigma, maxsigma)
-
-        #plot just truesigma1
-        plt.plot(temps1,truesigma1,linewidth=3)
-        plt.xlabel('Temperature (MeV)')
-        plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
-        plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml[0],mu[0],lambda1[0]))
-        plt.show()
+        # print("Sigma bounds for the next search are ", minsigma, maxsigma)
+        order=2
     else:
         print("First order")  
         #crtical temperature is where truesigma has multiple solutions  
         print("Critical temperature is ", temps[np.argmax(truesigma[:,1])] )
 
-        #reverse the order of the arrays where the plot goes "backward"
-        temps2= temps2[::-1]
-        truesigma2= truesigma2[::-1]
-        #find the index where the gradient of truesgima1 is most negative
-        splitIndex1=np.argmin(np.gradient(truesigma1))
+        order=1
+    return tmin,tmax,minsigma,maxsigma,order,temps,truesigma
 
-        #split truesigma1 and temps1 into two arrays at the index where the gradient is most negative
-        truesigma1a=truesigma1[:splitIndex1]
-        truesigma1b=truesigma1[splitIndex1:]
-        temps1a=temps1[:splitIndex1]
-        temps1b=temps1[splitIndex1:]
 
-        #join the arrays in the following order truesigma1a, truesigma3, truesigma2, truesigma1b
-        truesigma=np.concatenate((truesigma1a,truesigma3,truesigma2,truesigma1b))
-        temps=np.concatenate((temps1a,temps3,temps2,temps1b))
+if __name__ == '__main__':
 
-        "Uncomment these lines to make a nice-looking graph"
-        plt.plot(temps,truesigma,linewidth=3)
-        plt.xlabel('Temperature (MeV)')
-        plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
-        plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=%.3f$' %(ml[0],mu[0],float(str(lambda1[0]).rstrip('0').rstrip('.'))))        
-        # save the plot 
-        plt.savefig('plots/sigmaVsT_lambda_7438_mq_24_mu_400.png',dpi=500)
+    order=2
         
-        plt.show()
-    # end_time=time.perf_counter()
-    # print("Time elapsed = ", end_time-start_time )
+    tmin=130
+    tmax=150
+    numtemp=25
+    
+    
+    
+    #light quark mass
+    ml=24
+    
+    #chemical potential
+    mu=270
+    
+    lambda1= 7.8 #parameter for mixing between dilaton and chiral field
+    
+    minsigma=0
+    maxsigma=350
+    
+    a0=0. 
+
+    iterationNumber=0
+    
+    #iteratively run the order_checker function until the transition is first order, or until the bounds are too small
+    while order==2 and iterationNumber<10 and tmin<tmax and maxsigma-minsigma>2:
+        tmin,tmax,minsigma,maxsigma,order,temps,truesigma=order_checker(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
+        iterationNumber=iterationNumber+1
+        print("Iteration number ", iterationNumber)
+        if tmax<tmin:
+            print("TEMPERATURE BOUNDS REVERSED!!!")
+
+    plt.scatter(temps,truesigma[:,0])
+    plt.scatter(temps,truesigma[:,1])
+    plt.scatter(temps,truesigma[:,2])
+    # plt.ylim([min(truesigma[:,0])-5,max(truesigma[:,0])+5])
+    plt.xlim(tmin,tmax)
+    plt.xlabel('Temperature (MeV)')
+    plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
+    plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml,mu,lambda1))
+    plt.show()
+
+
+       
