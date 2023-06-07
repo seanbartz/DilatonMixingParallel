@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+EDITED On June 2 2023: 
+    Looks for minimum of gradient of sigma instead of sigma^(1/3), which is more reliable,
+    and will not accidentally say the transition temperature occurs when sigma goes to zero..
+
+    Because of this, it is no longer necessary to remove the zero values of sigma,
+    which allows the maximum value of T to be arbitrarily large. 
+    This makes the code more robust, and allows for a more accurate determination of the critical temperature.
+
+    Also, removed any points from truesigma[:,1] and truesigma[:,2] that are greater than 
+    the maximum value of truesigma[:,0], which helps prevent spurious results.
+    We don't need to fine tune the value of maxsiga or tmin as much.
+
 Created on Friday December 30 2022
 Split from threeflavorALLvalues.py
 
@@ -30,6 +42,7 @@ from timebudget import timebudget
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 import os
+import pandas as pd 
 
 
 # import time
@@ -216,13 +229,17 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
     processes_pool.close()
     
         
+    #if any values  of truesigma[:,1] or truesigma[:,2] are greater than the maximum value of truesigma[:,0], set them to zero
+    #these points are spurious.
+    truesigma[truesigma[:,1]>max(truesigma[:,0]),1]=0
+    truesigma[truesigma[:,2]>max(truesigma[:,0]),2]=0
 
     
     if max(truesigma[:,1])==0:
         print("Crossover or 2nd order")
         #keep only the non-zero values of truesigma, and the corresponding temperatures
-        temps=temps[truesigma[:,0]!=0]
-        truesigma=truesigma[truesigma[:,0]!=0]
+#         temps=temps[truesigma[:,0]!=0]
+#         truesigma=truesigma[truesigma[:,0]!=0]
 
         numtemp=len(temps)
         #find the temp value where the gradient of truesigma[:,0]**3 is most negative, and the value of truesigma[:,0] is not zero
@@ -231,6 +248,7 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
         #NOTE: we get better results when looking at the gradient of truesigma[:,0]**3, rather than truesigma[:,0]
         # this avoids accidentally identifying the temperature at which truesigma[:,0] goes to zero as the critical temperature
         transitionIndex=np.argmin(np.gradient(truesigma[:,0]**3))
+        Tc=temps[transitionIndex]
         buffer=2
         print("Pseudo-Critical temperature is between", temps[max(transitionIndex-buffer,0)], temps[min(transitionIndex+buffer,numtemp-1)] )
         #these temperature values are the new bounds for the next iteration, with a buffer of 1
@@ -247,54 +265,105 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
     else:
         print("First order")  
         #crtical temperature is where truesigma has multiple solutions  
-        print("Critical temperature is ", temps[np.argmax(truesigma[:,1])] )
+        Tc= temps[np.argmax(truesigma[:,1])]
+        print("Critical temperature is ", Tc )
+
 
         order=1
-    return tmin,tmax,minsigma,maxsigma,order,temps,truesigma
+    return tmin,tmax,minsigma,maxsigma,order,temps,truesigma,Tc
 
-
-if __name__ == '__main__':
-
+def critical_zoom(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0):
     order=2
-        
-    tmin=130
-    tmax=150
-    numtemp=25
-    
-    
-    
-    #light quark mass
-    ml=24
-    
-    #chemical potential
-    mu=270
-    
-    lambda1= 7.8 #parameter for mixing between dilaton and chiral field
-    
-    minsigma=0
-    maxsigma=350
-    
-    a0=0. 
-
     iterationNumber=0
-    
+
+    #create a list to store the sigma values, temperatures, and order of the transition
+    sigma_list=[]
+    temps_list=[]
+
+
     #iteratively run the order_checker function until the transition is first order, or until the bounds are too small
     while order==2 and iterationNumber<10 and tmin<tmax and maxsigma-minsigma>2:
-        tmin,tmax,minsigma,maxsigma,order,temps,truesigma=order_checker(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
+        tmin,tmax,minsigma,maxsigma,order,temps,truesigma,Tc=order_checker(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
         iterationNumber=iterationNumber+1
         print("Iteration number ", iterationNumber)
         if tmax<tmin:
             print("TEMPERATURE BOUNDS REVERSED!!!")
+        sigma_list.append(truesigma)
+        temps_list.append(temps)
 
-    plt.scatter(temps,truesigma[:,0])
-    plt.scatter(temps,truesigma[:,1])
-    plt.scatter(temps,truesigma[:,2])
-    # plt.ylim([min(truesigma[:,0])-5,max(truesigma[:,0])+5])
-    plt.xlim(tmin,tmax)
-    plt.xlabel('Temperature (MeV)')
-    plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
+    return order, iterationNumber, sigma_list,temps_list,Tc
+
+
+if __name__ == '__main__':
+
+    #temperature range
+    tmin=80
+    tmax=210
+    # number of temperature values
+    numtemp=25
+
+    #light quark mass
+    ml=24
+
+    #chemical potential
+    mu=150
+
+    lambda1= 7.8 #parameter for mixing between dilaton and chiral field
+
+    #sigma range
+    minsigma=0
+    maxsigma=400
+
+    a0=0. 
+
+    order, iterationNumber, sigma_list,temps_list,Tc=critical_zoom(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
+
+
+
+    #plot all the sigma values for each iteration
+    #get the standard colors for matplotlib
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+
+    #find the index of when sigma_list[0][:,0] has its first zero value
+    #this is the index of the first temperature where the sigma value is zero
+
+    max_index=np.argmax(sigma_list[0][:,0]==0)
+    #find the value of the temperature at this index
+    max_temp=temps_list[0][max_index]
+
+
+
+    for i in range(len(sigma_list)):
+        plt.scatter(temps_list[i],(sigma_list[i][:,0]/1000)**3,color=colors[0])
+        plt.scatter(temps_list[i],(sigma_list[i][:,1]/1000)**3,color=colors[1])
+        plt.scatter(temps_list[i],(sigma_list[i][:,2]/1000)**3,color=colors[2])
+    plt.xlabel("Temperature (MeV)")
+    plt.ylabel("$\sigma$ (GeV)$^3$")
+    #set the x range
+    plt.xlim(temps_list[0][0],max_temp)
     plt.title(r'$m_q=%i$ MeV, $\mu=%i$ MeV, $\lambda_1=$ %f' %(ml,mu,lambda1))
     plt.show()
+        
+    
+    # Save the data as a pandas data frame
+    df_all_list = []
+    for i in range(len(sigma_list)):
+        df=pd.DataFrame()
+        df['temps']=temps_list[i]
+        df['sigma1']=(sigma_list[i][:,0]/1000)**3   
+        df['sigma2']=(sigma_list[i][:,1]/1000)**3
+        df['sigma3']=(sigma_list[i][:,2]/1000)**3
+        df['order']=order
+        df['ml']=ml
+        df['mu']=mu
+        df['lambda1']=lambda1
+        df['a0']=a0
+        df['Tc']=Tc
+        df_all_list.append(df)
 
+    # Use pandas concat here
+    df_all = pd.concat(df_all_list)
 
-       
+    #pickle the data frame
+    df_all.to_pickle('data/chiral_transition_mq%i_mu%i_lambda1%f_order%i.pkl' %(ml,mu,lambda1,order))
