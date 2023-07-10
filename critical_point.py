@@ -100,6 +100,19 @@ def critical_point_refined(lambda1,a0,ml,tmin,tmax,numtemp,minsigma,maxsigma,mu_
         df['mu_crit']=mu_crit
         df['Tc_crit']=Tc_crit
 
+        # see if there is a csv file in the data folder called "critical_points.csv" if not, create one
+        try:
+            df2=pd.read_csv("data/critical_points.csv")
+        except:
+            df2=pd.DataFrame(columns=['ml','lambda1','mu_crit','Tc_crit'])
+        #add the critical point to the dataframe
+        df2=df2.append({'ml':ml,'lambda1':lambda1,'mu_crit':mu_crit,'Tc_crit':Tc_crit},ignore_index=True)
+        #save the dataframe as a csv file
+        df2.to_csv("data/critical_points.csv",index=False)
+    else:
+        print("no critical point found")
+        
+
 
     #pickle the dataframe with the values of ml, lambda1 in the filename
     df.to_pickle("data/phase_plot_zoom_mq_"+str(ml)+"_lambda_"+str(lambda1)+".pkl")
