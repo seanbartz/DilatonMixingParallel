@@ -125,10 +125,14 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     
     "stepsize for search over sigma"
     "Note: search should be done over cube root of sigma, here called sl"
-    if maxsigma-minsigma<20:
+    if np.abs(maxsigma-minsigma)<10:
         deltasig = 0.1
     else:
         deltasig = 1
+        
+    if minsigma>maxsigma:
+        deltasig=-deltasig
+        
     #tic = time.perf_counter()
 
     # create an array of sigma values from minsigma to maxsigma, incrementing by deltasig
@@ -284,7 +288,7 @@ def critical_zoom(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0):
     Tc=tmax #inserted in case the loop below never runs
     
     #iteratively run the order_checker function until the transition is first order, or until the bounds are too small
-    while order==2 and iterationNumber<10 and tmin<tmax and maxsigma-minsigma>2:
+    while order==2 and iterationNumber<10 and tmin<tmax and np.abs(maxsigma-minsigma)>2:
         tmin,tmax,minsigma,maxsigma,order,temps,truesigma,Tc=order_checker(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
         iterationNumber=iterationNumber+1
         print("Iteration number ", iterationNumber)
