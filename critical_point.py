@@ -51,9 +51,9 @@ def critical_point_refined(lambda1,a0,ml,tmin,tmax,numtemp,minsigma,maxsigma,mu_
             mu=mu+delta_mu
 
             #adjust the temperature range if Tc is too close to the boundaries
-            if Tc< tmin+50:
-                tmin=max(0,tmin-50)
-                tmax=max(tmin+50,tmax-50)
+            if Tc< tmin+20:
+                tmin=max(0,tmin-10)
+                tmax=max(tmin+50,tmax-10)
             #adjust maxsigma if it is too high
             if maxsigma>np.amax(sigma_list[0][:,0])+150:
                 maxsigma=np.amax(sigma_list[0][:,0])-50

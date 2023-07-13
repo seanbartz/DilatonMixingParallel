@@ -125,7 +125,7 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     
     "stepsize for search over sigma"
     "Note: search should be done over cube root of sigma, here called sl"
-    if maxsigma-minsigma<10:
+    if maxsigma-minsigma<20:
         deltasig = 0.1
     else:
         deltasig = 1
@@ -231,8 +231,8 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
         
     #if any values  of truesigma[:,1] or truesigma[:,2] are greater than the maximum value of truesigma[:,0], set them to zero
     #these points are spurious.
-    truesigma[truesigma[:,1]>max(truesigma[:,0]),1]=0
-    truesigma[truesigma[:,2]>max(truesigma[:,0]),2]=0
+    #truesigma[truesigma[:,1]>max(truesigma[:,0]),1]=0
+    #truesigma[truesigma[:,2]>max(truesigma[:,0]),2]=0
 
     
     if max(truesigma[:,1])==0:
@@ -256,7 +256,8 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
         tmax=temps[min(transitionIndex+buffer,numtemp-1)]
 
         #these values of sigma are the new bounds for the next iteration
-        maxsigma=truesigma[0,0]+1
+        #maxsigma=truesigma[0,0]+1 This assumes that the first element will be the largest, but sometimes this isn't true, especially for small quark mass
+        maxsigma=np.amax(truesigma)+1
         minsigma=truesigma[numtemp-1,0]
 
         #print the sigma values for the new bounds
@@ -280,7 +281,8 @@ def critical_zoom(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0):
     sigma_list=[]
     temps_list=[]
 
-
+    Tc=tmax #inserted in case the loop below never runs
+    
     #iteratively run the order_checker function until the transition is first order, or until the bounds are too small
     while order==2 and iterationNumber<10 and tmin<tmax and maxsigma-minsigma>2:
         tmin,tmax,minsigma,maxsigma,order,temps,truesigma,Tc=order_checker(tmin,tmax,numtemp,minsigma,maxsigma,ml,mu,lambda1,a0)
