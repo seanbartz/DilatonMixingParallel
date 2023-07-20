@@ -88,7 +88,7 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     limits of spatial variable z/zh. Should be close to 0 and 1, but 
     cannot go all the way to 0 or 1 because functions diverge there
     """
-    ui = 1e-4
+    ui = 1e-3
     uf = 1-ui
     "Create the spatial variable mesh"
     umesh=100
@@ -235,8 +235,8 @@ def order_checker(tmin,tmax,numtemp,minsigma,maxsigma, ml, mu, lambda1,a0):
         
     #if any values  of truesigma[:,1] or truesigma[:,2] are greater than the maximum value of truesigma[:,0], set them to zero
     #these points are spurious.
-    #truesigma[truesigma[:,1]>max(truesigma[:,0]),1]=0
-    #truesigma[truesigma[:,2]>max(truesigma[:,0]),2]=0
+    truesigma[truesigma[:,1]>max(truesigma[:,0]),1]=0
+    truesigma[truesigma[:,2]>max(truesigma[:,0]),2]=0
 
     
     if max(truesigma[:,1])==0:

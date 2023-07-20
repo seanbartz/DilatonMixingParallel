@@ -77,8 +77,8 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     limits of spatial variable z/zh. Should be close to 0 and 1, but 
     cannot go all the way to 0 or 1 because functions diverge there
     """
-    ui = 0.01
-    uf = 0.999
+    ui = 1e-4
+    uf = 1-ui
     "Create the spatial variable mesh"
     umesh=100
     u=np.linspace(ui,uf,umesh)
