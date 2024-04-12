@@ -63,7 +63,7 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     maxsigma=int(maxsigma)
     "stepsize for search over sigma"
     "Note: search should be done over cube root of sigma, here called sl"
-    deltasig = 1
+    deltasig = 0.5
     
     # create an array of sigma values from minsigma to maxsigma, incrementing by deltasig
     sigmavalues = np.arange(minsigma,maxsigma,deltasig)
@@ -77,7 +77,7 @@ def allSigmas(args):#,mu,ml,minsigma,maxsigma,a0,lambda1):
     limits of spatial variable z/zh. Should be close to 0 and 1, but 
     cannot go all the way to 0 or 1 because functions diverge there
     """
-    ui = 1e-4
+    ui = 1e-2
     uf = 1-ui
     "Create the spatial variable mesh"
     umesh=100
@@ -184,22 +184,23 @@ def get_all_sigmas_parallel(operation,input,pool):
 if __name__ == '__main__':
 
         
-    tmin=116.4
-    tmax=118
-    numtemp=50
+    tmin=50
+    tmax=100
+
+    numtemp=100
     
     temps=np.linspace(tmin,tmax,numtemp)
     
     #light quark mass
-    ml=24*np.ones(numtemp)
+    ml=0*np.ones(numtemp)
     
     #chemical potential
-    mu=400*np.ones(numtemp)
+    mu=0*np.ones(numtemp)
     
-    lambda1=7.438*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
+    lambda1=5.5*np.ones(numtemp) #parameter for mixing between dilaton and chiral field
     
-    minsigma=50*np.ones(numtemp)
-    maxsigma=225*np.ones(numtemp)
+    minsigma=0*np.ones(numtemp)
+    maxsigma=200*np.ones(numtemp)
     
     a0=0.*np.ones(numtemp)
     
@@ -218,7 +219,7 @@ if __name__ == '__main__':
     processes_pool = Pool(processes_count)
     
     truesigma=get_all_sigmas_parallel(allSigmas,tempsArgs,processes_pool)
-    truesigma=np.array(truesigma)
+    truesigma=np.array(truesigma)**3/1e9
     processes_pool.close()
     
     # find the indices of the non-zero values of truesigma
@@ -237,8 +238,8 @@ if __name__ == '__main__':
 
     # scatter plot the non-zero values    
     plt.scatter(temps1,truesigma1)
-    plt.scatter(temps2,truesigma2)
-    plt.scatter(temps3,truesigma3)
+    # plt.scatter(temps2,truesigma2)
+    # plt.scatter(temps3,truesigma3)
     #plt.ylim([min(truesigma1)-5,max(truesigma[:,0])+5])
     plt.xlabel('Temperature (MeV)')
     plt.ylabel(r'$\sigma^{1/3}$ (MeV)')
@@ -299,3 +300,7 @@ if __name__ == '__main__':
         plt.show()
     # end_time=time.perf_counter()
     # print("Time elapsed = ", end_time-start_time )
+
+    #export temps and truesigma to a the same csv file for plotting in another program
+    # np.savetxt('sigmaVsT_lambda_6_mq_15_mu_500.csv',np.column_stack((temps,truesigma)),delimiter=',',comments='')
+        
